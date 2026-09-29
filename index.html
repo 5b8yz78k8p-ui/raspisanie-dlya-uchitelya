@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Расписание учителя</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    min-height: 100vh; padding: 20px; color: #333;
+  }
+  .container {
+    max-width: 850px; margin: 0 auto; background: #fff;
+    border-radius: 16px; padding: 25px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  }
+  h1 { text-align: center; color: #4a3f8a; margin-bottom: 20px; font-size: 26px; }
+  .info { text-align: center; color: #666; margin-bottom: 20px; font-size: 14px; }
+
+  .toast {
+    position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
+    background: #2ecc71; color: #fff; padding: 10px 20px;
+    border-radius: 8px; font-weight: bold; font-size: 14px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+
+  .day-block {
+    margin-bottom: 15px; padding: 14px; background: #f7f7fb;
+    border-radius: 10px; border-left: 4px solid #667eea;
+  }
+  .day-block h3 { color: #4a3f8a; margin-bottom: 10px; font-size: 17px; }
+  .lesson-row {
+    display: flex; gap: 10px; margin-bottom: 8px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .lesson-num { font-weight: bold; color: #764ba2; min-width: 22px; text-align: center; }
+  select {
+    padding: 8px 10px; border: 2px solid #ddd; border-radius: 8px;
+    font-size: 14px; font-family: inherit; background: #fff;
+    flex: 1; min-width: 130px; cursor: pointer;
+  }
+  select:focus { outline: none; border-color: #667eea; }
+  .remove-btn {
+    background: #ff5757; color: #fff; border: none;
+    width: 32px; height: 32px; border-radius: 8px;
+    font-size: 18px; font-weight: bold; cursor: pointer; line-height: 1;
+  }
+  .add-btn {
+    background: #eef0ff; color: #4a3f8a; border: none;
+    padding: 8px 14px; border-radius: 8px; font-size: 13px;
+    font-weight: bold; cursor: pointer; margin-top: 4px;
+  }
+  .add-btn:hover { background: #dfe3ff; }
+
+  button { font-family: inherit; }
+  .btn-primary {
+    padding: 12px 24px; font-size: 16px; border: none;
+    border-radius: 8px; cursor: pointer; font-weight: bold;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff; width: 100%;
+    box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+  }
+  .btn-secondary {
+    padding: 12px 24px; font-size: 16px; border: none;
+    border-radius: 8px; cursor: pointer; font-weight: bold;
+    background: #eee; color: #4a3f8a; margin-right: 10px;
+  }
+  .btn-danger {
+    padding: 12px 24px; font-size: 16px; border: none;
+    border-radius: 8px; cursor: pointer; font-weight: bold;
+    background: #ff5757; color: #fff;
+  }
+  .actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .hidden { display: none !important; }
+
+  .schedule-card {
+    padding: 15px; background: #f7f7fb; border-radius: 10px;
+    border-left: 4px solid #764ba2; margin-bottom: 12px;
+  }
+  .schedule-card h3 { color: #4a3f8a; margin-bottom: 8px; font-size: 17px; }
+  .schedule-card ul { list-style: none; }
+  .schedule-card li {
+    padding: 8px 0 8px 22px; position: relative;
+    border-bottom: 1px dashed #ddd; font-size: 15px;
+  }
+  .schedule-card li:last-child { border-bottom: none; }
+  .schedule-card li::before { content: "📘"; position: absolute; left: 0; }
+  .lesson-label { font-weight: bold; color: #4a3f8a; }
+  .empty { color: #999; font-style: italic; padding-left: 0 !important; }
+  .empty::before { content: "" !important; }
+</style>
+</head>
+<body>
+<div class="toast" id="toast">Сохранено ✓</div>
+
+<div class="container">
+  <h1>📅 Расписание учителя</h1>
+
+  <!-- ПРОСМОТР -->
+  <div id="viewScreen" class="hidden">
+    <div id="scheduleView"></div>
+    <div class="actions">
+      <button class="btn-secondary" id="editBtn">✏️ Изменить</button>
+      <button class="btn-danger" id="resetBtn">🗑️ Сбросить всё</button>
+    </div>
+  </div>
+
+  <!-- РЕДАКТИРОВАНИЕ -->
+  <div id="editScreen">
+    <p class="info">Выбери класс и предмет. Нажми «+ Добавить урок», чтобы добавить ещё.</p>
+
+    <div class="day-block" data-day="Понедельник">
+      <h3>Понедельник</h3>
+      <div class="lessons"></div>
+      <button class="add-btn" type="button" onclick="addLesson('Понедельник')">+ Добавить урок</button>
+    </div>
+    <div class="day-block" data-day="Вторник">
+      <h3>Вторник</h3>
+      <div class="lessons"></div>
+      <button class="add-btn" type="button" onclick="addLesson('Вторник')">+ Добавить урок</button>
+    </div>
+    <div class="day-block" data-day="Среда">
+      <h3>Среда</h3>
+      <div class="lessons"></div>
+      <button class="add-btn" type="button" onclick="addLesson('Среда')">+ Добавить урок</button>
+    </div>
+    <div class="day-block" data-day="Четверг">
+      <h3>Четверг</h3>
+      <div class="lessons"></div>
+      <button class="add-btn" type="button" onclick="addLesson('Четверг')">+ Добавить урок</button>
+    </div>
+    <div class="day-block" data-day="Пятница">
+      <h3>Пятница</h3>
+      <div class="lessons"></div>
+      <button class="add-btn" type="button" onclick="addLesson('Пятница')">+ Добавить урок</button>
+    </div>
+    <div class="day-block" data-day="Суббота">
+      <h3>Суббота</h3>
+      <div class="lessons"></div>
+      <button class="add-btn" type="button" onclick="addLesson('Суббота')">+ Добавить урок</button>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="saveBtn">💾 Сохранить расписание</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const DAYS = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"];
+  const GRADES = ["5 класс","6 класс","7 класс","8 класс","9 класс","10 класс","11 класс"];
+  const SUBJECTS = ["Чеченский язык","Чеченская литература"];
+  const STORAGE_KEY = "teacherSchedule";
+
+  const editScreen   = document.getElementById("editScreen");
+  const viewScreen   = document.getElementById("viewScreen");
+  const scheduleView = document.getElementById("scheduleView");
+  const toast        = document.getElementById("toast");
+
+  function showToast(text) {
+    toast.textContent = text;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1500);
+  }
+
+  function loadSchedule() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : null;
+    } catch(e) { return null; }
+  }
+  function saveToStorage(s) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      return true;
+    } catch(e) { return false; }
+  }
+  function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  function buildLessonRow(grade, subject, num) {
+    const row = document.createElement("div");
+    row.className = "lesson-row";
+
+    const numSpan = document.createElement("span");
+    numSpan.className = "lesson-num";
+    numSpan.textContent = num + ".";
+
+    const gradeSel = document.createElement("select");
+    gradeSel.className = "grade-select";
+    GRADES.forEach(g => {
+      const o = document.createElement("option");
+      o.value = g; o.textContent = g;
+      if (g === grade) o.selected = true;
+      gradeSel.appendChild(o);
+    });
+
+    const subjSel = document.createElement("select");
+    subjSel.className = "subject-select";
+    SUBJECTS.forEach(s => {
+      const o = document.createElement("option");
+      o.value = s; o.textContent = s;
+      if (s === subject) o.selected = true;
+      subjSel.appendChild(o);
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove-btn";
+    removeBtn.textContent = "×";
+    removeBtn.onclick = () => {
+      const parent = row.parentElement;
+      row.remove();
+      renumberDay(parent);
+    };
+
+    row.appendChild(numSpan);
+    row.appendChild(gradeSel);
+    row.appendChild(subjSel);
+    row.appendChild(removeBtn);
+    return row;
+  }
+
+  function renumberDay(container) {
+    if (!container) return;
+    container.querySelectorAll(".lesson-row").forEach((r, i) => {
+      r.querySelector(".lesson-num").textContent = (i + 1) + ".";
+    });
+  }
+
+  function addLesson(day, grade, subject) {
+    const block = document.querySelector('.day-block[data-day="' + day + '"]');
+    const lessonsDiv = block.querySelector(".lessons");
+    const num = lessonsDiv.querySelectorAll(".lesson-row").length + 1;
+    const row = buildLessonRow(grade || GRADES[0], subject || SUBJECTS[0], num);
+    lessonsDiv.appendChild(row);
+  }
+
+  function fillForm(schedule) {
+    DAYS.forEach(day => {
+      const block = document.querySelector('.day-block[data-day="' + day + '"]');
+      const lessonsDiv = block.querySelector(".lessons");
+      lessonsDiv.innerHTML = "";
+      const arr = (schedule && schedule[day]) ? schedule[day] : [];
+      if (arr.length === 0) addLesson(day);
+      else arr.forEach(lesson => addLesson(day, lesson.grade, lesson.subject));
+    });
+  }
+
+  function collectForm() {
+    const schedule = {};
+    DAYS.forEach(day => {
+      const block = document.querySelector('.day-block[data-day="' + day + '"]');
+      const lessons = [];
+      block.querySelectorAll(".lesson-row").forEach(r => {
+        const grade = r.querySelector(".grade-select").value;
+        const subject = r.querySelector(".subject-select").value;
+        if (grade && subject) lessons.push({ grade: grade, subject: subject });
+      });
+      schedule[day] = lessons;
+    });
+    return schedule;
+  }
+
+  function showView() {
+    const schedule = loadSchedule() || {};
+    scheduleView.innerHTML = "";
+
+    DAYS.forEach(day => {
+      const lessons = schedule[day] || [];
+      const card = document.createElement("div");
+      card.className = "schedule-card";
+
+      let listHTML = "";
+      if (lessons.length === 0) {
+        listHTML = '<li class="empty">(нет уроков)</li>';
+      } else {
+        listHTML = lessons.map((l, i) =>
+          '<li><span class="lesson-label">' + (i + 1) + ' урок:</span> ' +
+          escapeHtml(l.grade) + ' — ' + escapeHtml(l.subject) + '</li>'
+        ).join("");
+      }
+      card.innerHTML = "<h3>" + day + "</h3><ul>" + listHTML + "</ul>";
+      scheduleView.appendChild(card);
+    });
+
+    viewScreen.classList.remove("hidden");
+    editScreen.classList.add("hidden");
+  }
+
+  function showEdit() {
+    const schedule = loadSchedule();
+    fillForm(schedule);
+    viewScreen.classList.add("hidden");
+    editScreen.classList.remove("hidden");
+  }
+
+  document.getElementById("saveBtn").addEventListener("click", () => {
+    const data = collectForm();
+    const ok = saveToStorage(data);
+    showView();
+    if (ok) showToast("Сохранено ✓");
+    else showToast("Ошибка сохранения");
+  });
+
+  document.getElementById("editBtn").addEventListener("click", showEdit);
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if (confirm("Точно удалить всё расписание?")) {
+      try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+      showEdit();
+    }
+  });
+
+  const saved = loadSchedule();
+  if (saved) showView();
+  else showEdit();
+</script>
+</body>
+</html>
