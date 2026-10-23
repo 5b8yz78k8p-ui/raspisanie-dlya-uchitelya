@@ -12,21 +12,12 @@
     min-height: 100vh; padding: 20px; color: #333;
   }
   .container {
-    max-width: 900px; margin: 0 auto; background: #fff;
+    max-width: 950px; margin: 0 auto; background: #fff;
     border-radius: 16px; padding: 25px;
     box-shadow: 0 20px 50px rgba(0,0,0,0.25);
   }
   h1 { text-align: center; color: #4a3f8a; margin-bottom: 20px; font-size: 26px; }
   .info { text-align: center; color: #666; margin-bottom: 20px; font-size: 14px; }
-
-  .toast {
-    position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
-    background: #2ecc71; color: #fff; padding: 10px 20px;
-    border-radius: 8px; font-weight: bold; font-size: 14px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
-  }
-  .toast.show { opacity: 1; }
 
   .day-block {
     margin-bottom: 15px; padding: 14px; background: #f7f7fb;
@@ -34,24 +25,24 @@
   }
   .day-block h3 { color: #4a3f8a; margin-bottom: 10px; font-size: 17px; }
   .lesson-row {
-    display: flex; gap: 8px; margin-bottom: 8px; align-items: center;
+    display: flex; gap: 6px; margin-bottom: 8px; align-items: center;
     flex-wrap: wrap;
   }
-  .lesson-num { font-weight: bold; color: #764ba2; min-width: 22px; text-align: center; }
+  .num-badge { font-weight: bold; color: #764ba2; min-width: 20px; text-align: center; }
   select {
-    padding: 8px 10px; border: 2px solid #ddd; border-radius: 8px;
-    font-size: 14px; font-family: inherit; background: #fff;
-    cursor: pointer;
+    padding: 8px 8px; border: 2px solid #ddd; border-radius: 8px;
+    font-size: 13px; font-family: inherit; background: #fff; cursor: pointer;
   }
   select:focus { outline: none; border-color: #667eea; }
-  .grade-select   { flex: 1.2; min-width: 110px; }
-  .letter-select  { flex: 0.7; min-width: 80px; }
-  .subject-select { flex: 1.6; min-width: 150px; }
+  .lesson-number-select { flex: 0.9; min-width: 95px; }
+  .grade-select         { flex: 0.9; min-width: 95px; }
+  .letter-select        { flex: 0.5; min-width: 60px; }
+  .subject-select       { flex: 1.4; min-width: 135px; }
 
   .remove-btn {
     background: #ff5757; color: #fff; border: none;
-    width: 32px; height: 32px; border-radius: 8px;
-    font-size: 18px; font-weight: bold; cursor: pointer; line-height: 1;
+    width: 30px; height: 30px; border-radius: 8px;
+    font-size: 17px; font-weight: bold; cursor: pointer; line-height: 1;
     flex-shrink: 0;
   }
   .add-btn {
@@ -97,11 +88,24 @@
   .lesson-label { font-weight: bold; color: #4a3f8a; }
   .empty { color: #999; font-style: italic; padding-left: 0 !important; }
   .empty::before { content: "" !important; }
+
+  .share-block {
+    margin-top: 20px; padding: 15px; background: #eef7ff;
+    border-radius: 10px; border-left: 4px solid #3399ff; font-size: 14px;
+  }
+  .share-block p { margin-bottom: 10px; color: #1a4f7a; }
+  .share-link {
+    width: 100%; padding: 10px; border: 2px solid #bcd9f2; border-radius: 8px;
+    font-size: 12px; font-family: monospace; background: #fff; margin-bottom: 10px;
+  }
+  .btn-copy {
+    padding: 10px 20px; font-size: 14px; border: none;
+    border-radius: 8px; cursor: pointer; font-weight: bold;
+    background: #3399ff; color: #fff;
+  }
 </style>
 </head>
 <body>
-<div class="toast" id="toast">Сохранено ✓</div>
-
 <div class="container">
   <h1>📅 Расписание учителя</h1>
 
@@ -112,11 +116,17 @@
       <button class="btn-secondary" id="editBtn">✏️ Изменить</button>
       <button class="btn-danger" id="resetBtn">🗑️ Сбросить всё</button>
     </div>
+
+    <div class="share-block">
+      <p>✅ Расписание сохранено. <b>Скопируй ссылку и сохрани её</b> — по ней потом откроется твоё расписание:</p>
+      <input type="text" class="share-link" id="shareLink" readonly>
+      <button class="btn-copy" id="copyBtn">📋 Скопировать ссылку</button>
+    </div>
   </div>
 
   <!-- РЕДАКТИРОВАНИЕ -->
   <div id="editScreen">
-    <p class="info">Выбери класс, букву и предмет. Нажми «+ Добавить урок», чтобы добавить ещё.</p>
+    <p class="info">Выбери номер урока, класс, букву и предмет. Нажми «+ Добавить урок», чтобы добавить ещё.</p>
 
     <div class="day-block" data-day="Понедельник">
       <h3>Понедельник</h3>
@@ -157,48 +167,59 @@
 
 <script>
   const DAYS = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"];
+  const LESSON_NUMBERS = ["1","2","3","4","5","6","7","8"];
   const GRADES = ["5","6","7","8","9","10","11"];
   const LETTERS = ["А","Б","В","Г"];
   const SUBJECTS = ["Чеченский язык","Чеченская литература"];
-  const STORAGE_KEY = "teacherSchedule";
+  const HASH_PREFIX = "#schedule=";
 
   const editScreen   = document.getElementById("editScreen");
   const viewScreen   = document.getElementById("viewScreen");
   const scheduleView = document.getElementById("scheduleView");
-  const toast        = document.getElementById("toast");
+  const shareLink    = document.getElementById("shareLink");
 
-  function showToast(text) {
-    toast.textContent = text;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 1500);
-  }
-
+  /* ---------- Чтение расписания из адресной строки ---------- */
   function loadSchedule() {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : null;
-    } catch(e) { return null; }
+      if (location.hash.indexOf(HASH_PREFIX) === 0) {
+        const raw = location.hash.slice(HASH_PREFIX.length);
+        return JSON.parse(decodeURIComponent(raw));
+      }
+    } catch(e) { console.warn("Ошибка чтения из ссылки:", e); }
+    return null;
   }
-  function saveToStorage(s) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-      return true;
-    } catch(e) { return false; }
+
+  /* ---------- Кодирование расписания в ссылку ---------- */
+  function buildShareLink(schedule) {
+    const base = location.origin + location.pathname + location.search;
+    const hash = HASH_PREFIX + encodeURIComponent(JSON.stringify(schedule));
+    return base + hash;
   }
+
   function escapeHtml(str) {
     const d = document.createElement("div");
     d.textContent = str == null ? "" : str;
     return d.innerHTML;
   }
 
-  /* ---------- Один ряд урока: класс + буква + предмет ---------- */
-  function buildLessonRow(grade, letter, subject, num) {
+  /* ---------- Один ряд урока ---------- */
+  function buildLessonRow(lessonNum, grade, letter, subject, num) {
     const row = document.createElement("div");
     row.className = "lesson-row";
 
-    const numSpan = document.createElement("span");
-    numSpan.className = "lesson-num";
-    numSpan.textContent = num + ".";
+    const numBadge = document.createElement("span");
+    numBadge.className = "num-badge";
+    numBadge.textContent = num + ".";
+
+    // номер урока (1-8)
+    const lessonNumSel = document.createElement("select");
+    lessonNumSel.className = "lesson-number-select";
+    LESSON_NUMBERS.forEach(n => {
+      const o = document.createElement("option");
+      o.value = n; o.textContent = n + " урок";
+      if (n === lessonNum) o.selected = true;
+      lessonNumSel.appendChild(o);
+    });
 
     // класс
     const gradeSel = document.createElement("select");
@@ -210,7 +231,7 @@
       gradeSel.appendChild(o);
     });
 
-    // буква класса
+    // буква
     const letterSel = document.createElement("select");
     letterSel.className = "letter-select";
     LETTERS.forEach(l => {
@@ -240,7 +261,8 @@
       renumberDay(parent);
     };
 
-    row.appendChild(numSpan);
+    row.appendChild(numBadge);
+    row.appendChild(lessonNumSel);
     row.appendChild(gradeSel);
     row.appendChild(letterSel);
     row.appendChild(subjSel);
@@ -251,15 +273,20 @@
   function renumberDay(container) {
     if (!container) return;
     container.querySelectorAll(".lesson-row").forEach((r, i) => {
-      r.querySelector(".lesson-num").textContent = (i + 1) + ".";
+      r.querySelector(".num-badge").textContent = (i + 1) + ".";
     });
   }
 
-  function addLesson(day, grade, letter, subject) {
+  function addLesson(day, lessonNum, grade, letter, subject) {
     const block = document.querySelector('.day-block[data-day="' + day + '"]');
     const lessonsDiv = block.querySelector(".lessons");
     const num = lessonsDiv.querySelectorAll(".lesson-row").length + 1;
+
+    // по умолчанию номер урока совпадает с порядком
+    const defaultLessonNum = lessonNum || LESSON_NUMBERS[(num - 1) % LESSON_NUMBERS.length];
+
     const row = buildLessonRow(
+      defaultLessonNum,
       grade || GRADES[0],
       letter || LETTERS[0],
       subject || SUBJECTS[0],
@@ -277,9 +304,7 @@
       if (arr.length === 0) {
         addLesson(day);
       } else {
-        arr.forEach(lesson => {
-          addLesson(day, lesson.grade, lesson.letter || "А", lesson.subject);
-        });
+        arr.forEach(l => addLesson(day, l.lessonNum, l.grade, l.letter || "А", l.subject));
       }
     });
   }
@@ -290,13 +315,21 @@
       const block = document.querySelector('.day-block[data-day="' + day + '"]');
       const lessons = [];
       block.querySelectorAll(".lesson-row").forEach(r => {
-        const grade   = r.querySelector(".grade-select").value;
-        const letter  = r.querySelector(".letter-select").value;
-        const subject = r.querySelector(".subject-select").value;
-        if (grade && letter && subject) {
-          lessons.push({ grade: grade, letter: letter, subject: subject });
+        const lessonNum = r.querySelector(".lesson-number-select").value;
+        const grade     = r.querySelector(".grade-select").value;
+        const letter    = r.querySelector(".letter-select").value;
+        const subject   = r.querySelector(".subject-select").value;
+        if (lessonNum && grade && letter && subject) {
+          lessons.push({
+            lessonNum: lessonNum,
+            grade: grade,
+            letter: letter,
+            subject: subject
+          });
         }
       });
+      // сортируем уроки по номеру (1, 2, 3...)
+      lessons.sort((a, b) => Number(a.lessonNum) - Number(b.lessonNum));
       schedule[day] = lessons;
     });
     return schedule;
@@ -315,15 +348,17 @@
       if (lessons.length === 0) {
         listHTML = '<li class="empty">(нет уроков)</li>';
       } else {
-        listHTML = lessons.map((l, i) =>
-          '<li><span class="lesson-label">' + (i + 1) + ' урок:</span> ' +
-          escapeHtml(l.grade) + ' «' + escapeHtml(l.letter || "А") + '» -- ' +
+        listHTML = lessons.map(l =>
+          '<li><span class="lesson-label">' + escapeHtml(l.lessonNum) + ' урок:</span> ' +
+          escapeHtml(l.grade) + ' «' + escapeHtml(l.letter || "А") + '» — ' +
           escapeHtml(l.subject) + '</li>'
         ).join("");
       }
       card.innerHTML = "<h3>" + day + "</h3><ul>" + listHTML + "</ul>";
       scheduleView.appendChild(card);
     });
+
+    shareLink.value = buildShareLink(schedule);
 
     viewScreen.classList.remove("hidden");
     editScreen.classList.add("hidden");
@@ -338,21 +373,33 @@
 
   document.getElementById("saveBtn").addEventListener("click", () => {
     const data = collectForm();
-    const ok = saveToStorage(data);
+    try {
+      history.replaceState(null, "", HASH_PREFIX + encodeURIComponent(JSON.stringify(data)));
+    } catch(e) { console.warn("Не удалось обновить адрес:", e); }
     showView();
-    if (ok) showToast("Сохранено ✓");
-    else showToast("Ошибка сохранения");
   });
 
   document.getElementById("editBtn").addEventListener("click", showEdit);
 
   document.getElementById("resetBtn").addEventListener("click", () => {
     if (confirm("Точно удалить всё расписание?")) {
-      try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+      try { history.replaceState(null, "", location.pathname); } catch(e) {}
       showEdit();
     }
   });
 
+  document.getElementById("copyBtn").addEventListener("click", () => {
+    shareLink.select();
+    shareLink.setSelectionRange(0, 99999);
+    try {
+      document.execCommand("copy");
+      alert("Ссылка скопирована ✓");
+    } catch(e) {
+      alert("Не получилось, скопируй вручную");
+    }
+  });
+
+  /* ---------- Запуск ---------- */
   const saved = loadSchedule();
   if (saved) showView();
   else showEdit();
